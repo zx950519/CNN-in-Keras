@@ -1,483 +1,240 @@
-# from keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D, AveragePooling2D, BatchNormalization, Input
-# from keras.layers import ZeroPadding2D, Convolution2D, GlobalAveragePooling2D, Activation ,merge
-# from keras.models import Model
-#
-#
-#
-# def DenseNet121(nb_dense_block=4, growth_rate=32,
-#                 nb_filter=64, reduction=0.0, dropout_rate=0.0,
-#                 weight_decay=1e-4, classes=1000, weights_path=None):
-#     '''Instantiate the DenseNet 121 architecture,
-#         # Arguments
-#             nb_dense_block: number of dense blocks to add to end
-#             growth_rate: number of filters to add per dense block
-#             nb_filter: initial number of filters
-#             reduction: reduction factor of transition blocks.
-#             dropout_rate: dropout rate
-#             weight_decay: weight decay factor
-#             classes: optional number of classes to classify images
-#             weights_path: path to pre-trained weights
-#         # Returns
-#             A Keras model instance.
-#     '''
-#     eps = 1.1e-5
-#
-#     # compute compression factor
-#     compression = 1.0 - reduction
-#
-#     # Handle Dimension Ordering for different backends
-#     global concat_axis
-#     if K.image_dim_ordering() == 'tf':
-#       concat_axis = 3
-#       img_input = Input(shape=(224, 224, 3), name='data')
-#     else:
-#       concat_axis = 1
-#       img_input = Input(shape=(3, 224, 224), name='data')
-#
-#     # From architecture for ImageNet (Table 1 in the paper)
-#     nb_filter = 64
-#     nb_layers = [6,12,24,16] # For DenseNet-121
-#
-#     # Initial convolution
-#     x = ZeroPadding2D((3, 3), name='conv1_zeropadding')(img_input)
-#     x = Convolution2D(nb_filter, 7, 7, subsample=(2, 2), name='conv1', bias=False)(x)
-#     x = BatchNormalization(epsilon=eps, axis=concat_axis, name='conv1_bn')(x)
-#     x = Scale(axis=concat_axis, name='conv1_scale')(x)
-#     x = Activation('relu', name='relu1')(x)
-#     x = ZeroPadding2D((1, 1), name='pool1_zeropadding')(x)
-#     x = MaxPooling2D((3, 3), strides=(2, 2), name='pool1')(x)
-#
-#     # Add dense blocks
-#     for block_idx in range(nb_dense_block - 1):
-#         stage = block_idx+2
-#         x, nb_filter = dense_block(x, stage, nb_layers[block_idx], nb_filter, growth_rate, dropout_rate=dropout_rate, weight_decay=weight_decay)
-#
-#         # Add transition_block
-#         x = transition_block(x, stage, nb_filter, compression=compression, dropout_rate=dropout_rate, weight_decay=weight_decay)
-#         nb_filter = int(nb_filter * compression)
-#
-#     final_stage = stage + 1
-#     x, nb_filter = dense_block(x, final_stage, nb_layers[-1], nb_filter, growth_rate, dropout_rate=dropout_rate, weight_decay=weight_decay)
-#
-#     x = BatchNormalization(epsilon=eps, axis=concat_axis, name='conv'+str(final_stage)+'_blk_bn')(x)
-#     x = Scale(axis=concat_axis, name='conv'+str(final_stage)+'_blk_scale')(x)
-#     x = Activation('relu', name='relu'+str(final_stage)+'_blk')(x)
-#     x = GlobalAveragePooling2D(name='pool'+str(final_stage))(x)
-#
-#     x = Dense(classes, name='fc6')(x)
-#     x = Activation('softmax', name='prob')(x)
-#
-#     model = Model(img_input, x, name='densenet')
-#
-#     if weights_path is not None:
-#       model.load_weights(weights_path)
-#
-#     return model
-#
-#
-# def conv_block(x, stage, branch, nb_filter, dropout_rate=None, weight_decay=1e-4):
-#     '''Apply BatchNorm, Relu, bottleneck 1x1 Conv2D, 3x3 Conv2D, and option dropout
-#         # Arguments
-#             x: input tensor
-#             stage: index for dense block
-#             branch: layer index within each dense block
-#             nb_filter: number of filters
-#             dropout_rate: dropout rate
-#             weight_decay: weight decay factor
-#     '''
-#     eps = 1.1e-5
-#     conv_name_base = 'conv' + str(stage) + '_' + str(branch)
-#     relu_name_base = 'relu' + str(stage) + '_' + str(branch)
-#
-#     # 1x1 Convolution (Bottleneck layer)
-#     inter_channel = nb_filter * 4
-#     x = BatchNormalization(epsilon=eps, axis=concat_axis, name=conv_name_base+'_x1_bn')(x)
-#     x = Scale(axis=concat_axis, name=conv_name_base+'_x1_scale')(x)
-#     x = Activation('relu', name=relu_name_base+'_x1')(x)
-#     x = Convolution2D(inter_channel, 1, 1, name=conv_name_base+'_x1', bias=False)(x)
-#
-#     if dropout_rate:
-#         x = Dropout(dropout_rate)(x)
-#
-#     # 3x3 Convolution
-#     x = BatchNormalization(epsilon=eps, axis=concat_axis, name=conv_name_base+'_x2_bn')(x)
-#     x = Scale(axis=concat_axis, name=conv_name_base+'_x2_scale')(x)
-#     x = Activation('relu', name=relu_name_base+'_x2')(x)
-#     x = ZeroPadding2D((1, 1), name=conv_name_base+'_x2_zeropadding')(x)
-#     x = Convolution2D(nb_filter, 3, 3, name=conv_name_base+'_x2', bias=False)(x)
-#
-#     if dropout_rate:
-#         x = Dropout(dropout_rate)(x)
-#
-#     return x
-#
-#
-# def transition_block(x, stage, nb_filter, compression=1.0, dropout_rate=None, weight_decay=1E-4):
-#     ''' Apply BatchNorm, 1x1 Convolution, averagePooling, optional compression, dropout
-#         # Arguments
-#             x: input tensor
-#             stage: index for dense block
-#             nb_filter: number of filters
-#             compression: calculated as 1 - reduction. Reduces the number of feature maps in the transition block.
-#             dropout_rate: dropout rate
-#             weight_decay: weight decay factor
-#     '''
-#
-#     eps = 1.1e-5
-#     conv_name_base = 'conv' + str(stage) + '_blk'
-#     relu_name_base = 'relu' + str(stage) + '_blk'
-#     pool_name_base = 'pool' + str(stage)
-#
-#     x = BatchNormalization(epsilon=eps, axis=concat_axis, name=conv_name_base+'_bn')(x)
-#     x = Scale(axis=concat_axis, name=conv_name_base+'_scale')(x)
-#     x = Activation('relu', name=relu_name_base)(x)
-#     x = Convolution2D(int(nb_filter * compression), 1, 1, name=conv_name_base, bias=False)(x)
-#
-#     if dropout_rate:
-#         x = Dropout(dropout_rate)(x)
-#
-#     x = AveragePooling2D((2, 2), strides=(2, 2), name=pool_name_base)(x)
-#
-#     return x
-#
-#
-# def dense_block(x, stage, nb_layers, nb_filter, growth_rate, dropout_rate=None, weight_decay=1e-4, grow_nb_filters=True):
-#     ''' Build a dense_block where the output of each conv_block is fed to subsequent ones
-#         # Arguments
-#             x: input tensor
-#             stage: index for dense block
-#             nb_layers: the number of layers of conv_block to append to the model.
-#             nb_filter: number of filters
-#             growth_rate: growth rate
-#             dropout_rate: dropout rate
-#             weight_decay: weight decay factor
-#             grow_nb_filters: flag to decide to allow number of filters to grow
-#     '''
-#
-#     eps = 1.1e-5
-#     concat_feat = x
-#
-#     for i in range(nb_layers):
-#         branch = i+1
-#         x = conv_block(concat_feat, stage, branch, growth_rate, dropout_rate, weight_decay)
-#         concat_feat = merge([concat_feat, x], mode='concat', concat_axis=concat_axis, name='concat_'+str(stage)+'_'+str(branch))
-#
-#         if grow_nb_filters:
-#             nb_filter += growth_rate
-#
-#     return concat_feat, nb_filter
-#
-#
-# from keras.engine import Layer, InputSpec
-# try:
-#     from keras import initializations
-# except ImportError:
-#     from keras import initializers as initializations
-# import keras.backend as K
-#
-# class Scale(Layer):
-#     '''Custom Layer for DenseNet used for BatchNormalization.
-#
-#     Learns a set of weights and biases used for scaling the input data.
-#     the output consists simply in an element-wise multiplication of the input
-#     and a sum of a set of constants:
-#         out = in * gamma + beta,
-#     where 'gamma' and 'beta' are the weights and biases larned.
-#     # Arguments
-#         axis: integer, axis along which to normalize in mode 0. For instance,
-#             if your input tensor has shape (samples, channels, rows, cols),
-#             set axis to 1 to normalize per feature map (channels axis).
-#         momentum: momentum in the computation of the
-#             exponential average of the mean and standard deviation
-#             of the data, for feature-wise normalization.
-#         weights: Initialization weights.
-#             List of 2 Numpy arrays, with shapes:
-#             `[(input_shape,), (input_shape,)]`
-#         beta_init: name of initialization function for shift parameter
-#             (see [initializations](../initializations.md)), or alternatively,
-#             Theano/TensorFlow function to use for weights initialization.
-#             This parameter is only relevant if you don't pass a `weights` argument.
-#         gamma_init: name of initialization function for scale parameter (see
-#             [initializations](../initializations.md)), or alternatively,
-#             Theano/TensorFlow function to use for weights initialization.
-#             This parameter is only relevant if you don't pass a `weights` argument.
-#     '''
-#
-#     def __init__(self, weights=None, axis=-1, momentum=0.9, beta_init='zero', gamma_init='one', **kwargs):
-#         self.momentum = momentum
-#         self.axis = axis
-#         self.beta_init = initializations.get(beta_init)
-#         self.gamma_init = initializations.get(gamma_init)
-#         self.initial_weights = weights
-#         super(Scale, self).__init__(**kwargs)
-#
-#     def build(self, input_shape):
-#         self.input_spec = [InputSpec(shape=input_shape)]
-#         shape = (int(input_shape[self.axis]),)
-#
-#         # Tensorflow >= 1.0.0 compatibility
-#         self.gamma = K.variable(self.gamma_init(shape), name='{}_gamma'.format(self.name))
-#         self.beta = K.variable(self.beta_init(shape), name='{}_beta'.format(self.name))
-#         # self.gamma = self.gamma_init(shape, name='{}_gamma'.format(self.name))
-#         # self.beta = self.beta_init(shape, name='{}_beta'.format(self.name))
-#         self.trainable_weights = [self.gamma, self.beta]
-#
-#         if self.initial_weights is not None:
-#             self.set_weights(self.initial_weights)
-#             del self.initial_weights
-#
-#     def call(self, x, mask=None):
-#         input_shape = self.input_spec[0].shape
-#         broadcast_shape = [1] * len(input_shape)
-#         broadcast_shape[self.axis] = input_shape[self.axis]
-#
-#         out = K.reshape(self.gamma, broadcast_shape) * x + K.reshape(self.beta, broadcast_shape)
-#         return out
-#
-#     def get_config(self):
-#         config = {"momentum": self.momentum, "axis": self.axis}
-#         base_config = super(Scale, self).get_config()
-#         return dict(list(base_config.items()) + list(config.items()))
-
+from keras.datasets import cifar10
+from keras.datasets import mnist
+from keras.preprocessing.image import ImageDataGenerator
+from keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D, AveragePooling2D, BatchNormalization, Input, Activation
+from keras.layers import Convolution2D, GlobalAveragePooling2D, Concatenate
+from keras.regularizers import l2
+from keras.optimizers import Adam
 from keras.models import Model
-from keras.layers import Input, merge, ZeroPadding2D
-from keras.layers.core import Dense, Dropout, Activation
-from keras.layers.convolutional import Convolution2D
-from keras.layers.pooling import AveragePooling2D, GlobalAveragePooling2D, MaxPooling2D
-from keras.layers.normalization import BatchNormalization
+from keras.models import model_from_json
+from keras.callbacks import ModelCheckpoint
+
 import keras.backend as K
+import keras
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-def DenseNet(nb_dense_block=4, growth_rate=32, nb_filter=64, reduction=0.0, dropout_rate=0.0, weight_decay=1e-4, classes=1000, weights_path=None):
-    '''Instantiate the DenseNet 121 architecture,
-        # Arguments
-            nb_dense_block: number of dense blocks to add to end
-            growth_rate: number of filters to add per dense block
-            nb_filter: initial number of filters
-            reduction: reduction factor of transition blocks.
-            dropout_rate: dropout rate
-            weight_decay: weight decay factor
-            classes: optional number of classes to classify images
-            weights_path: path to pre-trained weights
-        # Returns
-            A Keras model instance.
-    '''
-    eps = 1.1e-5
-
-    # compute compression factor
-    compression = 1.0 - reduction
-
-    # Handle Dimension Ordering for different backends
-    global concat_axis
-    if K.image_dim_ordering() == 'tf':
-      concat_axis = 3
-      img_input = Input(shape=(224, 224, 3), name='data')
+# 数据增强
+def getDataGenerator(train_phase,rescale=1./255):
+    if train_phase == True:
+        datagen = ImageDataGenerator(
+        rotation_range=0.,
+        width_shift_range=0.05,
+        height_shift_range=0.05,
+        shear_range=0.05,
+        zoom_range=0.05,
+        channel_shift_range=0.,
+        fill_mode='nearest',
+        horizontal_flip=True,
+        vertical_flip=False,
+        rescale=rescale)
     else:
-      concat_axis = 1
-      img_input = Input(shape=(3, 224, 224), name='data')
+        datagen = ImageDataGenerator(
+        rescale=rescale
+        )
+    return datagen
 
-    # From architecture for ImageNet (Table 1 in the paper)
-    nb_filter = 64
-    nb_layers = [6,12,24,16] # For DenseNet-121
-
-    # Initial convolution
-    x = ZeroPadding2D((3, 3), name='conv1_zeropadding')(img_input)
-    x = Convolution2D(nb_filter, 7, 7, subsample=(2, 2), name='conv1', bias=False)(x)
-    x = BatchNormalization(epsilon=eps, axis=concat_axis, name='conv1_bn')(x)
-    x = Scale(axis=concat_axis, name='conv1_scale')(x)
-    x = Activation('relu', name='relu1')(x)
-    x = ZeroPadding2D((1, 1), name='pool1_zeropadding')(x)
-    x = MaxPooling2D((3, 3), strides=(2, 2), name='pool1')(x)
-
-    # Add dense blocks
-    for block_idx in range(nb_dense_block - 1):
-        stage = block_idx+2
-        x, nb_filter = dense_block(x, stage, nb_layers[block_idx], nb_filter, growth_rate, dropout_rate=dropout_rate, weight_decay=weight_decay)
-
-        # Add transition_block
-        x = transition_block(x, stage, nb_filter, compression=compression, dropout_rate=dropout_rate, weight_decay=weight_decay)
-        nb_filter = int(nb_filter * compression)
-
-    final_stage = stage + 1
-    x, nb_filter = dense_block(x, final_stage, nb_layers[-1], nb_filter, growth_rate, dropout_rate=dropout_rate, weight_decay=weight_decay)
-
-    x = BatchNormalization(epsilon=eps, axis=concat_axis, name='conv'+str(final_stage)+'_blk_bn')(x)
-    x = Scale(axis=concat_axis, name='conv'+str(final_stage)+'_blk_scale')(x)
-    x = Activation('relu', name='relu'+str(final_stage)+'_blk')(x)
-    x = GlobalAveragePooling2D(name='pool'+str(final_stage))(x)
-
-    x = Dense(classes, name='fc6')(x)
-    x = Activation('softmax', name='prob')(x)
-
-    model = Model(img_input, x, name='densenet')
-
-    if weights_path is not None:
-      model.load_weights(weights_path)
-
-    return model
-
-
-def conv_block(x, stage, branch, nb_filter, dropout_rate=None, weight_decay=1e-4):
-    '''Apply BatchNorm, Relu, bottleneck 1x1 Conv2D, 3x3 Conv2D, and option dropout
-        # Arguments
-            x: input tensor
-            stage: index for dense block
-            branch: layer index within each dense block
-            nb_filter: number of filters
-            dropout_rate: dropout rate
-            weight_decay: weight decay factor
-    '''
-    eps = 1.1e-5
-    conv_name_base = 'conv' + str(stage) + '_' + str(branch)
-    relu_name_base = 'relu' + str(stage) + '_' + str(branch)
-
-    # 1x1 Convolution (Bottleneck layer)
-    inter_channel = nb_filter * 4
-    x = BatchNormalization(epsilon=eps, axis=concat_axis, name=conv_name_base+'_x1_bn')(x)
-    x = Scale(axis=concat_axis, name=conv_name_base+'_x1_scale')(x)
-    x = Activation('relu', name=relu_name_base+'_x1')(x)
-    x = Convolution2D(inter_channel, 1, 1, name=conv_name_base+'_x1', bias=False)(x)
-
-    if dropout_rate:
+# 卷积块
+def conv_block(input, nb_filter, dropout_rate=None, weight_decay=1E-4):
+    # 激活层
+    x = Activation('relu')(input)
+    # 卷积层
+    x = Convolution2D(nb_filter, (3, 3), kernel_initializer="he_uniform", padding="same", use_bias=False,
+                      kernel_regularizer=l2(weight_decay))(x)
+    # Dropout层
+    if dropout_rate is not None:
         x = Dropout(dropout_rate)(x)
-
-    # 3x3 Convolution
-    x = BatchNormalization(epsilon=eps, axis=concat_axis, name=conv_name_base+'_x2_bn')(x)
-    x = Scale(axis=concat_axis, name=conv_name_base+'_x2_scale')(x)
-    x = Activation('relu', name=relu_name_base+'_x2')(x)
-    x = ZeroPadding2D((1, 1), name=conv_name_base+'_x2_zeropadding')(x)
-    x = Convolution2D(nb_filter, 3, 3, name=conv_name_base+'_x2', bias=False)(x)
-
-    if dropout_rate:
-        x = Dropout(dropout_rate)(x)
-
     return x
 
+# 全连接块
+def dense_block(x, nb_layers, nb_filter, growth_rate, dropout_rate=None, weight_decay=1E-4):
 
-def transition_block(x, stage, nb_filter, compression=1.0, dropout_rate=None, weight_decay=1E-4):
-    ''' Apply BatchNorm, 1x1 Convolution, averagePooling, optional compression, dropout
-        # Arguments
-            x: input tensor
-            stage: index for dense block
-            nb_filter: number of filters
-            compression: calculated as 1 - reduction. Reduces the number of feature maps in the transition block.
-            dropout_rate: dropout rate
-            weight_decay: weight decay factor
-    '''
+    concat_axis = 1 if K.image_dim_ordering() == "th" else -1
 
-    eps = 1.1e-5
-    conv_name_base = 'conv' + str(stage) + '_blk'
-    relu_name_base = 'relu' + str(stage) + '_blk'
-    pool_name_base = 'pool' + str(stage)
-
-    x = BatchNormalization(epsilon=eps, axis=concat_axis, name=conv_name_base+'_bn')(x)
-    x = Scale(axis=concat_axis, name=conv_name_base+'_scale')(x)
-    x = Activation('relu', name=relu_name_base)(x)
-    x = Convolution2D(int(nb_filter * compression), 1, 1, name=conv_name_base, bias=False)(x)
-
-    if dropout_rate:
-        x = Dropout(dropout_rate)(x)
-
-    x = AveragePooling2D((2, 2), strides=(2, 2), name=pool_name_base)(x)
-
-    return x
-
-
-def dense_block(x, stage, nb_layers, nb_filter, growth_rate, dropout_rate=None, weight_decay=1e-4, grow_nb_filters=True):
-    ''' Build a dense_block where the output of each conv_block is fed to subsequent ones
-        # Arguments
-            x: input tensor
-            stage: index for dense block
-            nb_layers: the number of layers of conv_block to append to the model.
-            nb_filter: number of filters
-            growth_rate: growth rate
-            dropout_rate: dropout rate
-            weight_decay: weight decay factor
-            grow_nb_filters: flag to decide to allow number of filters to grow
-    '''
-
-    eps = 1.1e-5
-    concat_feat = x
+    feature_list = [x]
 
     for i in range(nb_layers):
-        branch = i+1
-        x = conv_block(concat_feat, stage, branch, growth_rate, dropout_rate, weight_decay)
-        concat_feat = merge([concat_feat, x], mode='concat', concat_axis=concat_axis, name='concat_'+str(stage)+'_'+str(branch))
+        x = conv_block(x, growth_rate, dropout_rate, weight_decay)
+        feature_list.append(x)
+        x = Concatenate(axis=concat_axis)(feature_list)
+        nb_filter += growth_rate
 
-        if grow_nb_filters:
-            nb_filter += growth_rate
+    return x, nb_filter
 
-    return concat_feat, nb_filter
+# Transition块
+def transition_block(input, nb_filter, dropout_rate=None, weight_decay=1E-4):
+    concat_axis = 1 if K.image_dim_ordering() == "th" else -1
+    # 卷积层
+    x = Convolution2D(nb_filter, (1, 1), kernel_initializer="he_uniform", padding="same", use_bias=False,
+                      kernel_regularizer=l2(weight_decay))(input)
+    # Dropout层
+    if dropout_rate is not None:
+        x = Dropout(dropout_rate)(x)
+    # 池化层
+    x = AveragePooling2D((2, 2), strides=(2, 2))(x)
+    # 标准化层
+    x = BatchNormalization(axis=concat_axis, gamma_regularizer=l2(weight_decay),
+                           beta_regularizer=l2(weight_decay))(x)
+    return x
 
+# 创建DenseNet
+def createDenseNet(nb_classes, img_dim, depth=40, nb_dense_block=3, growth_rate=12, nb_filter=16, dropout_rate=None,
+                     weight_decay=1E-4, verbose=True):
+    # 输入层
+    model_input = Input(shape=img_dim)
+    concat_axis = 1 if K.image_dim_ordering() == "th" else -1
+    # Depth must be 3 N + 4
+    assert (depth - 4) % 3 == 0, "Depth must be 3 N + 4"
 
-from keras.engine import Layer, InputSpec
+    # layers in each dense block
+    # 每个全连接块中的层数
+    nb_layers = int((depth - 4) / 3)
 
-try:
-    from keras import initializations
-except ImportError:
-    from keras import initializers as initializations
-import keras.backend as K
+    # 卷积层
+    x = Convolution2D(nb_filter, (3, 3), kernel_initializer="he_uniform", padding="same", name="initial_conv2D", use_bias=False,
+                      kernel_regularizer=l2(weight_decay))(model_input)
+    # 标准化层
+    x = BatchNormalization(axis=concat_axis, gamma_regularizer=l2(weight_decay),
+                            beta_regularizer=l2(weight_decay))(x)
 
+    # 添加全连接块
+    print("总共有："+str(nb_dense_block)+"添加全连接块")
+    for block_idx in range(nb_dense_block - 1):
+        x, nb_filter = dense_block(x, nb_layers, nb_filter, growth_rate, dropout_rate=dropout_rate,
+                                   weight_decay=weight_decay)
+        # 添加Transition块
+        x = transition_block(x, nb_filter, dropout_rate=dropout_rate, weight_decay=weight_decay)
 
-class Scale(Layer):
-    '''Custom Layer for DenseNet used for BatchNormalization.
+    # The last dense_block does not have a transition_block
+    # 最后一个全连接块没有Transition块
+    x, nb_filter = dense_block(x, nb_layers, nb_filter, growth_rate, dropout_rate=dropout_rate,
+                               weight_decay=weight_decay)
 
-    Learns a set of weights and biases used for scaling the input data.
-    the output consists simply in an element-wise multiplication of the input
-    and a sum of a set of constants:
-        out = in * gamma + beta,
-    where 'gamma' and 'beta' are the weights and biases larned.
-    # Arguments
-        axis: integer, axis along which to normalize in mode 0. For instance,
-            if your input tensor has shape (samples, channels, rows, cols),
-            set axis to 1 to normalize per feature map (channels axis).
-        momentum: momentum in the computation of the
-            exponential average of the mean and standard deviation
-            of the data, for feature-wise normalization.
-        weights: Initialization weights.
-            List of 2 Numpy arrays, with shapes:
-            `[(input_shape,), (input_shape,)]`
-        beta_init: name of initialization function for shift parameter
-            (see [initializations](../initializations.md)), or alternatively,
-            Theano/TensorFlow function to use for weights initialization.
-            This parameter is only relevant if you don't pass a `weights` argument.
-        gamma_init: name of initialization function for scale parameter (see
-            [initializations](../initializations.md)), or alternatively,
-            Theano/TensorFlow function to use for weights initialization.
-            This parameter is only relevant if you don't pass a `weights` argument.
-    '''
+    # 激活层
+    x = Activation('relu')(x)
+    # 池化层
+    x = GlobalAveragePooling2D()(x)
+    # 全连接层
+    x = Dense(nb_classes, activation='softmax', kernel_regularizer=l2(weight_decay), bias_regularizer=l2(weight_decay))(x)
+    # 模型汇总
+    densenet = Model(inputs=model_input, outputs=x)
 
-    def __init__(self, weights=None, axis=-1, momentum=0.9, beta_init='zero', gamma_init='one', **kwargs):
-        self.momentum = momentum
-        self.axis = axis
-        self.beta_init = initializations.get(beta_init)
-        self.gamma_init = initializations.get(gamma_init)
-        self.initial_weights = weights
-        super(Scale, self).__init__(**kwargs)
+    if verbose:
+        print("DenseNet-%d-%d created." % (depth, growth_rate))
 
-    def build(self, input_shape):
-        self.input_spec = [InputSpec(shape=input_shape)]
-        shape = (int(input_shape[self.axis]),)
+    return densenet
 
-        # Tensorflow >= 1.0.0 compatibility
-        self.gamma = K.variable(self.gamma_init(shape), name='{}_gamma'.format(self.name))
-        self.beta = K.variable(self.beta_init(shape), name='{}_beta'.format(self.name))
-        # self.gamma = self.gamma_init(shape, name='{}_gamma'.format(self.name))
-        # self.beta = self.beta_init(shape, name='{}_beta'.format(self.name))
-        self.trainable_weights = [self.gamma, self.beta]
+def fit(ROWS, COLS, CHANNELS, nb_classes, batch_size, modelPath, weightsPath, overwrite):
 
-        if self.initial_weights is not None:
-            self.set_weights(self.initial_weights)
-            del self.initial_weights
+    # 删除旧模型已经权重
+    if (os.path.exists(modelPath)):
+        if (overwrite == True):
+            os.remove(modelPath)
+    if (os.path.exists(weightsPath)):
+        if (overwrite == True):
+            os.remove(weightsPath)
 
-    def call(self, x, mask=None):
-        input_shape = self.input_spec[0].shape
-        broadcast_shape = [1] * len(input_shape)
-        broadcast_shape[self.axis] = input_shape[self.axis]
+    # 图像格式
+    img_dim = (ROWS, COLS, CHANNELS)
+    # 网络深度
+    densenet_depth = 40
+    # ?
+    densenet_growth_rate = 12
 
-        out = K.reshape(self.gamma, broadcast_shape) * x + K.reshape(self.beta, broadcast_shape)
-        return out
+    # 加载数据
+    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    # 数据归一化
+    x_train = x_train.astype('float32')
+    x_test = x_test.astype('float32')
+    x_train /= 255
+    x_test /= 255
+    # 类别由单列转化为向量
+    y_train = keras.utils.to_categorical(y_train, nb_classes)
+    y_test = keras.utils.to_categorical(y_test, nb_classes)
+    # 数据增强
+    train_datagen = getDataGenerator(train_phase=True)
+    train_datagen = train_datagen.flow(x_train, y_train, batch_size=batch_size)
+    validation_datagen = getDataGenerator(train_phase=False)
+    validation_datagen = validation_datagen.flow(x_test, y_test, batch_size=batch_size)
 
-    def get_config(self):
-        config = {"momentum": self.momentum, "axis": self.axis}
-        base_config = super(Scale, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+    # 建立模型
+    model = createDenseNet(nb_classes=nb_classes, img_dim=img_dim, depth=densenet_depth,
+                           growth_rate=densenet_growth_rate)
+    # 是否加载预训练权重
+    # if resume == True:
+    #     model.load_weights(check_point_file)
+    # 自定义优化器
+    optimizer = Adam()
+    # optimizer = SGD(lr=0.001)
+
+    # 模型编译
+    model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+    # 模型概览
+    model.summary()
+
+    # 训练模型-方式1
+    model.fit(x_train, y_train,
+              batch_size=batch_size,
+              epochs=20,
+              verbose=1,
+              validation_data=(x_test, y_test))
+
+    # 训练模型-方式2
+    # check_point_file = filepath="./model/checkpoint-{epoch:02d}e-val_acc_{val_acc:.2f}.hdf5"
+    # model_checkpoint = ModelCheckpoint(check_point_file, monitor="val_acc", save_best_only=True,
+    #                                    save_weights_only=True, verbose=1)
+    # callbacks = [model_checkpoint]
+    # model.fit_generator(generator=train_datagen,
+    #                 steps_per_epoch= x_train.shape[0] // batch_size,
+    #                 epochs=10,
+    #                 callbacks=callbacks,
+    #                 validation_data=validation_datagen,
+    #                 validation_steps = x_test.shape[0] // batch_size,
+    #                 verbose=1)
+
+    # 保存模型及权重
+    json_string = model.to_json()
+    open(modelPath, "w").write(json_string)
+    model.save_weights(weightsPath)
+
+def train():
+    # 行
+    ROWS = 32
+    # 列
+    COLS = 32
+    # 通道
+    CHANNELS = 3
+    # 类别总数
+    nb_classes = 10
+    # 每批处理的数据量
+    batch_size = 128
+    # 是否覆盖原模型、权重
+    overwrite = True
+    # 训练模型
+    fit(ROWS, COLS, CHANNELS, nb_classes, batch_size,
+                "./model/LeNet_model.json", "./model/LeNet_weights.h5", overwrite)
+
+def test(modelPath, weightsPath, overwrite):
+    if (os.path.exists(modelPath)):
+        if (overwrite == True):
+            os.remove(modelPath)
+    else:
+        print("模型不存在")
+        return
+    if (os.path.exists(weightsPath)):
+        if (overwrite == True):
+            os.remove(weightsPath)
+    else:
+        print("模型不存在")
+        return
+    # 加载模型权重
+    model = model_from_json(open(modelPath).read())
+    model.load_weights(weightsPath)
+
+    # Todo 验证
+
+if __name__ == "__main__":
+
+    # 校验模型
+    print("DenseNet...")
+    train()

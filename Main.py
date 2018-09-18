@@ -102,8 +102,8 @@ def predit(modelPath, weightPath, imgPath):
 
 if __name__ == "__main__":
     # 训练LeNet并测试
-    # fit(lenet5.getLeNetModel(), 128, 10, 10, 28, 28, "./model/LeNet_model.json", "./model/LeNet_weights.h5", True)
-    # print(predit("./model/LeNet_model.json", "./model/LeNet_weights.h5", "./data/test/6/mnist_test_81.png"))
+    fit(lenet5.getLeNetModel(), 128, 10, 10, 28, 28, "./model/LeNet_model.json", "./model/LeNet_weights.h5", True)
+    print(predit("./model/LeNet_model.json", "./model/LeNet_weights.h5", "./data/test/6/mnist_test_81.png"))
 
     # 训练AlNet并测试
     # fit(alexnet.getAlexNetModel(), 128, 10, 10, 28, 28, "./model/AlexNet_model.json", "./model/AlexNet_weights.h5", True)
@@ -125,12 +125,18 @@ if __name__ == "__main__":
     # print(predit("./model/GoogleNet_model.json", "./model/GoogleNet_weights.h5", "./data/test/6/mnist_test_81.png"))
 
     # 训练ResNet并测试
-    # fit(resnet.getResNet(), 128, 10, 10, 28, 28, "./model/ResNet_model.json", "./model/ResNet_weights.h5",
-    #     True)
-    # print(predit("./model/ResNet_model.json", "./model/ResNet_weights.h5", "./data/test/6/mnist_test_81.png"))
+    model = resnet.getResNet()
+    fit(model, 128, 10, 10, 28, 28, "./model/ResNet_model.json", "./model/ResNet_weights.h5",
+        True)
+    print(predit("./model/ResNet_model.json", "./model/ResNet_weights.h5", "./data/test/6/mnist_test_81.png"))
 
     # 训练DenseNet并测试 需要224*224*3的训练集 但是目前只有28*28*1的训练集
     # model = keras.applications.DenseNet121(include_top=True, weights='imagenet', input_tensor=None, input_shape=None, pooling=None, classes=1000)
+    # model.compile(loss=keras.losses.categorical_crossentropy,
+    #               optimizer=keras.optimizers.Adadelta(),
+    #               metrics=["accuracy"])
+    # model.summary()
+
     # fit(model, 128, 10, 10, 28, 28, "./model/DenseNet_model.json", "./model/DenseNet_weights.h5",
     #     True)
     # print(predit("./model/DenseNet_model.json", "./model/DenseNet_weights.h5", "./data/test/6/mnist_test_81.png"))
