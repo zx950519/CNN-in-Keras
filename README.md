@@ -7,3 +7,5 @@
 ## LeNet5-Mnist
 
 ## DenseNet-Cifar10
+
+## ResNet-Cifar10
