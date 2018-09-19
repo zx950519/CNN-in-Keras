@@ -102,8 +102,8 @@ def predit(modelPath, weightPath, imgPath):
 
 if __name__ == "__main__":
     # 训练LeNet并测试
-    fit(lenet5.getLeNetModel(), 128, 10, 10, 28, 28, "./model/LeNet_model.json", "./model/LeNet_weights.h5", True)
-    print(predit("./model/LeNet_model.json", "./model/LeNet_weights.h5", "./data/test/6/mnist_test_81.png"))
+    # fit(lenet5.getLeNetModel(), 128, 10, 10, 28, 28, "./model/LeNet_model.json", "./model/LeNet_weights.h5", True)
+    # print(predit("./model/LeNet_model.json", "./model/LeNet_weights.h5", "./data/test/6/mnist_test_81.png"))
 
     # 训练AlNet并测试
     # fit(alexnet.getAlexNetModel(), 128, 10, 10, 28, 28, "./model/AlexNet_model.json", "./model/AlexNet_weights.h5", True)
