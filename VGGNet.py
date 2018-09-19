@@ -120,7 +120,7 @@ def train():
                                  y_train_ohe,
                                  validation_data=(X_test, y_test_ohe),
                                  epochs=epoch,
-                                 batch_size=10)
+                                 batch_size=128)
     ## 在测试集上评价模型精确度
     scores = model_vgg_mnist_pretrain.evaluate(X_test, y_test_ohe, verbose=0)
     ## 打印精确度
