@@ -4,8 +4,10 @@
 
 ## 环境:Keras2.2+Py3.6
 
-## LeNet5-Mnist
+## LeNet5-Mnist数据集已验证通过
 
-## DenseNet-Cifar10
+## DenseNet-Cifar10数据集已验证通过
 
-## ResNet-Cifar10
+## ResNet-Cifar10数据集已验证通过
+
+## GoogleNet-InceptionV3-尚无可用数据集验证通过
