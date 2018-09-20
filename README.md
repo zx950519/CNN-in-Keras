@@ -6,6 +6,8 @@
 
 ## LeNet5-Mnist数据集已验证通过
 
+## VGGNet-Mnist数据集已验证通过
+
 ## DenseNet-Cifar10数据集已验证通过
 
 ## ResNet-Cifar10数据集已验证通过
