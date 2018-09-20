@@ -1,190 +1,92 @@
-# from keras.models import Sequential
-# from keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D, AveragePooling2D, BatchNormalization, Input
-# from keras.models import Model
-# import keras.backend as K
-#
-# def Conv2d_BN(x, nb_filter,kernel_size, padding='same',strides=(1,1),name=None):
-#     if name is not None:
-#         bn_name = name + '_bn'
-#         conv_name = name + '_conv'
-#     else:
-#         bn_name = None
-#         conv_name = None
-#
-#     x = Conv2D(nb_filter, kernel_size, padding=padding, strides=strides, activation='relu', name=conv_name)(x)
-#     x = BatchNormalization(axis=3, name=bn_name)(x)
-#     return x
-#
-# def Inception(x, nb_filter):
-#     branch1x1 = Conv2d_BN(x, nb_filter, (1, 1), padding='same', strides=(1,1), name=None)
-#
-#     branch3x3 = Conv2d_BN(x, nb_filter, (1,1), padding='same', strides=(1, 1), name=None)
-#     branch3x3 = Conv2d_BN(branch3x3, nb_filter, (3, 3), padding='same', strides=(1,1), name=None)
-#
-#     branch5x5 = Conv2d_BN(x, nb_filter, (1, 1), padding='same', strides=(1,1), name=None)
-#     branch5x5 = Conv2d_BN(branch5x5, nb_filter, (1, 1), padding='same', strides=(1,1), name=None)
-#
-#     branchpool = MaxPooling2D(pool_size=(3, 3), strides=(1,1), padding='same')(x)
-#     branchpool = Conv2d_BN(branchpool, nb_filter, (1, 1), padding='same', strides=(1,1), name=None)
-#
-#     x = K.concatenate([branch1x1, branch3x3, branch5x5, branchpool], axis=3)
-#
-#     return x
-#
-# def getGoogLeNet():
-#     inpt = Input(shape=(224, 224, 3))
-#     #padding = 'same'，填充为(步长-1）/2,还可以用ZeroPadding2D((3,3))
-#     x = Conv2d_BN(inpt, 64, (7, 7), strides=(2, 2),padding='same')
-#     x = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding='same')(x)
-#
-#     x = Conv2d_BN(x, 192, (3, 3), strides=(1, 1),padding='same')
-#     x = MaxPooling2D(pool_size=(3, 3), strides=(2, 2),padding='same')(x)
-#
-#     x = Inception(x, 64)#256
-#     x = Inception(x, 120)#480
-#     x = MaxPooling2D(pool_size=(3, 3), strides=(2, 2),padding='same')(x)
-#
-#     x = Inception(x, 128)#512
-#     x = Inception(x, 128)
-#     x = Inception(x, 128)
-#     x = Inception(x, 132)#528
-#     x = Inception(x, 208)#832
-#     x = MaxPooling2D(pool_size=(3,3),strides=(2,2),padding='same')(x)
-#
-#     x = Inception(x, 208)
-#     x = Inception(x, 256)#1024
-#     x = AveragePooling2D(pool_size=(7, 7), strides=(7, 7), padding='same')(x)
-#
-#     x = Dropout(0.4)(x)
-#     x = Dense(1000, activation='relu')(x)
-#     x = Dense(1000, activation='softmax')(x)
-#
-#     model = Model(inpt, x, name='inception')
-#
-#     return model
-
-from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D, ZeroPadding2D
-from keras.layers import Flatten, Dense, Dropout
-from keras.layers import Input, concatenate
+from keras.layers import Input, Dense, Convolution2D, MaxPooling2D, AveragePooling2D, ZeroPadding2D, Dropout, Flatten
+from keras.layers import merge, Reshape, Activation, Conv2D, GlobalAveragePooling2D
 from keras.models import Model
-from keras import regularizers
-from keras.utils import plot_model
-# from KerasLayers.Custom_layers import LRN2D
+from keras.preprocessing.image import ImageDataGenerator
+from keras.applications import InceptionV3
+from keras.datasets import cifar10
 
+import keras
 
-# Global Constants
-NB_CLASS=1000
-LEARNING_RATE=0.01
-MOMENTUM=0.9
-ALPHA=0.0001
-BETA=0.75
-GAMMA=0.1
-DROPOUT=0.4
-WEIGHT_DECAY=0.0005
-LRN2D_NORM=True
-DATA_FORMAT='channels_last' # Theano:'channels_first' Tensorflow:'channels_last'
-USE_BN=True
+def build_model(nb_classes):
 
+    base_model = InceptionV3(weights='imagenet', include_top=False)
+    # add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+    # let's add a fully-connected layer
+    x = Dense(1024, activation='relu')(x)
+    # and a logistic layer
+    predictions = Dense(nb_classes, activation='softmax')(x)
+    # this is the model we will train
+    model = Model(input=base_model.input, output=predictions)
+    # first: train only the top layers (which were randomly initialized)
+    # i.e. freeze all convolutional InceptionV3 layers
+    for layer in base_model.layers:
+        layer.trainable = False
+    # # compile the model (should be done *after* setting layers to non-trainable)
+    # print("starting model compile")
+    # model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
+    # print("model compile done")
+    return model
 
-def conv2D_lrn2d(x,filters,kernel_size,strides=(1,1),padding='same',data_format=DATA_FORMAT,dilation_rate=(1,1),activation='relu',use_bias=True,kernel_initializer='glorot_uniform',bias_initializer='zeros',kernel_regularizer=None,bias_regularizer=None,activity_regularizer=None,kernel_constraint=None,bias_constraint=None,lrn2d_norm=LRN2D_NORM,weight_decay=WEIGHT_DECAY):
-    if weight_decay:
-        kernel_regularizer=regularizers.l2(weight_decay)
-        bias_regularizer=regularizers.l2(weight_decay)
-    else:
-        kernel_regularizer=None
-        bias_regularizer=None
+if __name__ == "__main__":
+    # 加载数据
+    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    print('训练集张量:', x_train.shape)
+    print(x_train.shape[0], '个训练样例')
+    print(x_test.shape[0], '个测试样例')
+    # 转化为one-hot形式
+    y_train = keras.utils.to_categorical(y_train, 10)
+    y_test = keras.utils.to_categorical(y_test, 10)
+    # 数据归一化
+    x_train = x_train.astype('float32')
+    x_test = x_test.astype('float32')
+    x_train /= 255
+    x_test /= 255
 
-    x=Conv2D(filters=filters,kernel_size=kernel_size,strides=strides,padding=padding,data_format=data_format,dilation_rate=dilation_rate,activation=activation,use_bias=use_bias,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer,kernel_regularizer=kernel_regularizer,bias_regularizer=bias_regularizer,activity_regularizer=activity_regularizer,kernel_constraint=kernel_constraint,bias_constraint=bias_constraint)(x)
-
-    if lrn2d_norm:
-        x=LRN2D(alpha=ALPHA,beta=BETA)(x)
-
-    return x
-
-
-
-def inception_module(x,params,concat_axis,padding='same',data_format=DATA_FORMAT,dilation_rate=(1,1),activation='relu',use_bias=True,kernel_initializer='glorot_uniform',bias_initializer='zeros',kernel_regularizer=None,bias_regularizer=None,activity_regularizer=None,kernel_constraint=None,bias_constraint=None,lrn2d_norm=LRN2D_NORM,weight_decay=None):
-    (branch1,branch2,branch3,branch4)=params
-    if weight_decay:
-        kernel_regularizer=regularizers.l2(weight_decay)
-        bias_regularizer=regularizers.l2(weight_decay)
-    else:
-        kernel_regularizer=None
-        bias_regularizer=None
-
-    pathway1=Conv2D(filters=branch1[0],kernel_size=(1,1),strides=1,padding=padding,data_format=data_format,dilation_rate=dilation_rate,activation=activation,use_bias=use_bias,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer,kernel_regularizer=kernel_regularizer,bias_regularizer=bias_regularizer,activity_regularizer=activity_regularizer,kernel_constraint=kernel_constraint,bias_constraint=bias_constraint)(x)
-
-    pathway2=Conv2D(filters=branch2[0],kernel_size=(1,1),strides=1,padding=padding,data_format=data_format,dilation_rate=dilation_rate,activation=activation,use_bias=use_bias,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer,kernel_regularizer=kernel_regularizer,bias_regularizer=bias_regularizer,activity_regularizer=activity_regularizer,kernel_constraint=kernel_constraint,bias_constraint=bias_constraint)(x)
-    pathway2=Conv2D(filters=branch2[1],kernel_size=(3,3),strides=1,padding=padding,data_format=data_format,dilation_rate=dilation_rate,activation=activation,use_bias=use_bias,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer,kernel_regularizer=kernel_regularizer,bias_regularizer=bias_regularizer,activity_regularizer=activity_regularizer,kernel_constraint=kernel_constraint,bias_constraint=bias_constraint)(pathway2)
-
-    pathway3=Conv2D(filters=branch3[0],kernel_size=(1,1),strides=1,padding=padding,data_format=data_format,dilation_rate=dilation_rate,activation=activation,use_bias=use_bias,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer,kernel_regularizer=kernel_regularizer,bias_regularizer=bias_regularizer,activity_regularizer=activity_regularizer,kernel_constraint=kernel_constraint,bias_constraint=bias_constraint)(x)
-    pathway3=Conv2D(filters=branch3[1],kernel_size=(5,5),strides=1,padding=padding,data_format=data_format,dilation_rate=dilation_rate,activation=activation,use_bias=use_bias,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer,kernel_regularizer=kernel_regularizer,bias_regularizer=bias_regularizer,activity_regularizer=activity_regularizer,kernel_constraint=kernel_constraint,bias_constraint=bias_constraint)(pathway3)
-
-    pathway4=MaxPooling2D(pool_size=(3,3),strides=1,padding=padding,data_format=DATA_FORMAT)(x)
-    pathway4=Conv2D(filters=branch4[0],kernel_size=(1,1),strides=1,padding=padding,data_format=data_format,dilation_rate=dilation_rate,activation=activation,use_bias=use_bias,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer,kernel_regularizer=kernel_regularizer,bias_regularizer=bias_regularizer,activity_regularizer=activity_regularizer,kernel_constraint=kernel_constraint,bias_constraint=bias_constraint)(pathway4)
-
-    return concatenate([pathway1,pathway2,pathway3,pathway4],axis=concat_axis)
-
-
-
-def create_model():
-    if DATA_FORMAT=='channels_first':
-        INP_SHAPE=(3,224,224)
-        img_input=Input(shape=INP_SHAPE)
-        CONCAT_AXIS=1
-    elif DATA_FORMAT=='channels_last':
-        INP_SHAPE=(224,224,3)
-        img_input=Input(shape=INP_SHAPE)
-        CONCAT_AXIS=3
-    else:
-        raise Exception('Invalid Dim Ordering: '+str(DIM_ORDERING))
-
-    x=conv2D_lrn2d(img_input,64,(7,7),2,padding='same',lrn2d_norm=False)
-    x=MaxPooling2D(pool_size=(3,3),strides=2,padding='same',data_format=DATA_FORMAT)(x)
-    x=LRN2D(alpha=ALPHA,beta=BETA)(x)
-
-    x=conv2D_lrn2d(x,64,(1,1),1,padding='same',lrn2d_norm=False)
-
-    x=conv2D_lrn2d(x,192,(3,3),1,padding='same',lrn2d_norm=True)
-    x=MaxPooling2D(pool_size=(3,3),strides=2,padding='same',data_format=DATA_FORMAT)(x)
-
-    x=inception_module(x,params=[(64,),(96,128),(16,32),(32,)],concat_axis=CONCAT_AXIS) #3a
-    x=inception_module(x,params=[(128,),(128,192),(32,96),(64,)],concat_axis=CONCAT_AXIS) #3b
-    x=MaxPooling2D(pool_size=(3,3),strides=2,padding='same',data_format=DATA_FORMAT)(x)
-
-    x=inception_module(x,params=[(192,),(96,208),(16,48),(64,)],concat_axis=CONCAT_AXIS) #4a
-    x=inception_module(x,params=[(160,),(112,224),(24,64),(64,)],concat_axis=CONCAT_AXIS) #4b
-    x=inception_module(x,params=[(128,),(128,256),(24,64),(64,)],concat_axis=CONCAT_AXIS) #4c
-    x=inception_module(x,params=[(112,),(144,288),(32,64),(64,)],concat_axis=CONCAT_AXIS) #4d
-    x=inception_module(x,params=[(256,),(160,320),(32,128),(128,)],concat_axis=CONCAT_AXIS) #4e
-    x=MaxPooling2D(pool_size=(3,3),strides=2,padding='same',data_format=DATA_FORMAT)(x)
-
-    x=inception_module(x,params=[(256,),(160,320),(32,128),(128,)],concat_axis=CONCAT_AXIS) #5a
-    x=inception_module(x,params=[(384,),(192,384),(48,128),(128,)],concat_axis=CONCAT_AXIS) #5b
-    x=AveragePooling2D(pool_size=(7,7),strides=1,padding='valid',data_format=DATA_FORMAT)(x)
-
-    x=Flatten()(x)
-    x=Dropout(DROPOUT)(x)
-    x=Dense(output_dim=NB_CLASS,activation='linear')(x)
-    x=Dense(output_dim=NB_CLASS,activation='softmax')(x)
-
-    return x,img_input,CONCAT_AXIS,INP_SHAPE,DATA_FORMAT
-
-
-def check_print():
-    # Create the Model
-    x,img_input,CONCAT_AXIS,INP_SHAPE,DATA_FORMAT=create_model()
-
-    # Create a Keras Model
-    model=Model(input=img_input,output=[x])
+    model = build_model(10)
+    # 采用RMSprop作为优化器
+    opt = keras.optimizers.rmsprop(lr=0.0001, decay=1e-6)
+    # 模型编译
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=opt,
+                  metrics=['accuracy'])
     model.summary()
-
-    # Save a PNG of the Model Build
-    plot_model(model,to_file='GoogLeNet.png')
-
-    model.compile(optimizer='rmsprop',loss='categorical_crossentropy')
-    print('Model Compiled')
-
-
-if __name__=='__main__':
-    check_print()
+    # GoogleNet—Inecption 最小输入size为：150*150*3
+    datagen = ImageDataGenerator(
+        featurewise_center=False,  # set input mean to 0 over the dataset
+        samplewise_center=False,  # set each sample mean to 0
+        featurewise_std_normalization=False,  # divide inputs by std of the dataset
+        samplewise_std_normalization=False,  # divide each input by its std
+        zca_whitening=False,  # apply ZCA whitening
+        zca_epsilon=1e-06,  # epsilon for ZCA whitening
+        rotation_range=0,  # randomly rotate images in the range (degrees, 0 to 180)
+        # randomly shift images horizontally (fraction of total width)
+        width_shift_range=0.1,
+        # randomly shift images vertically (fraction of total height)
+        height_shift_range=0.1,
+        shear_range=0.,  # set range for random shear
+        zoom_range=0.,  # set range for random zoom
+        channel_shift_range=0.,  # set range for random channel shifts
+        # set mode for filling points outside the input boundaries
+        fill_mode='nearest',
+        cval=0.,  # value used for fill_mode = "constant"
+        horizontal_flip=True,  # randomly flip images
+        vertical_flip=False,  # randomly flip images
+        # set rescaling factor (applied before any other transformation)
+        rescale=None,
+        # set function that will be applied on each input
+        preprocessing_function=(x_train.shape[0], 224, 224, 3),
+        # image data format, either "channels_first" or "channels_last"
+        data_format=None,
+        # fraction of images reserved for validation (strictly between 0 and 1)
+        validation_split=0.0)
+    # Compute quantities required for feature-wise normalization
+    # (std, mean, and principal components if ZCA whitening is applied).
+    datagen.fit(x_train)
+    # Fit the model on the batches generated by datagen.flow().
+    model.fit_generator(datagen.flow(x_train, y_train,
+                                     batch_size=64),
+                        epochs=10,
+                        validation_data=(x_test, y_test),
+                        workers=4)
