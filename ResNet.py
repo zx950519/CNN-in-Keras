@@ -11,11 +11,14 @@ from keras import backend as K
 from keras.models import Model
 from keras.datasets import cifar10
 from keras.utils import plot_model
+from utils import *
+from keras.applications import *
 from matplotlib import pyplot as plt
 
 import numpy as np
 import keras
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
@@ -34,23 +37,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 # ResNet164 |27(18)| -----     | 94.07     | -----     | 94.54     | ---(---)
 # ResNet1001| (111)| -----     | 92.39     | -----     | 95.08+-.14| ---(---)
 # ---------------------------------------------------------------------------
-
-# 定义学习率调整函数
-# 该函数是回调函数 LearningRateScheduler的参数
-# 以epoch为参数，返回一个新的学习率
-def lr_schedule(epoch):
-    lr = 1e-3
-    if epoch > 180:
-        lr *= 0.5e-3
-    elif epoch > 160:
-        lr *= 1e-3
-    elif epoch > 120:
-        lr *= 1e-2
-    elif epoch > 80:
-        lr *= 1e-1
-    print("Learning rate: ", lr)
-
-    return lr
 
 # 定义一个resnet层
 # 预激活结构：BN-ReLU-conv
@@ -216,44 +202,38 @@ def resnet_v2(input_shape, depth, num_classes=10):
     model = Model(inputs=inputs, outputs=outputs)
     return model
 
-def train():
 
+batch_size = 32     # paper中设置 batch_size=128
+epochs = 50    # 训练轮次
+diy = True         # 自定义网格或采用Keras预设
+data_augmentation = False    # 是否采用数据增强
+num_classes = 10    # 类别数
+subtract_pixel_mean = True  # 是否对矩阵进行求均值->做差
+version = 2     # 模型型号选择，version = 1 (ResNet v1) version = 2 (ResNet v2)
+n = 3   # 设置模型层次深度
+
+if __name__=="__main__":
+
+    # 环境设置
     gpu_options = tf.GPUOptions(allow_growth=True)
     sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
-    # 超参
-    # 批处理量
-    batch_size = 32  # paper中设置 batch_size=128
-    # 训练轮次
-    epochs = 200
-    # 是否采用数据增强
-    data_augmentation = True
-    # 类别数
-    num_classes = 10
-    # 是否对矩阵进行求均值->做差
-    subtract_pixel_mean = True
-    # 模型型号选择，version = 1 (ResNet v1) version = 2 (ResNet v2)
-    version = 2
-    # 设置模型层次深度
-    n = 3
-    # 选择版本
+    # 选择模型版本
     if version == 1:
         depth = n * 6 + 2
     elif version == 2:
         depth = n * 9 + 2
+
     # 模型名
     model_type = 'ResNet%dv%d' % (depth, version)
 
     # 加载data
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-    # Input image dimensions = 50000.
-    # 数据格式
+    # 数据格式(32*32*3)
     input_shape = x_train.shape[1:]
-
     # 数据预处理
     x_train = x_train.astype('float32') / 255
     x_test = x_test.astype('float32') / 255
-
     if subtract_pixel_mean:
         x_train_mean = np.mean(x_train, axis=0)
         x_train -= x_train_mean
@@ -268,19 +248,27 @@ def train():
     y_train = keras.utils.to_categorical(y_train, num_classes)
     y_test = keras.utils.to_categorical(y_test, num_classes)
 
-    # 模型编译
-    if version == 2:
-        model = resnet_v2(input_shape=input_shape, depth=depth)
+    if diy == True:
+        # 模型编译
+        if version == 2:
+            model = resnet_v2(input_shape=input_shape, depth=depth)
+        else:
+            model = resnet_v1(input_shape=input_shape, depth=depth)
+        model.compile(loss='categorical_crossentropy',
+                      optimizer=Adam(lr=lr_schedule(0)),
+                      metrics=['accuracy'])
+        # 模型概览
+        model.summary()
+        # 画出模型结构图，并保存成图片
+        plot_model(model, to_file="ResNetV2.png")
     else:
-        model = resnet_v1(input_shape=input_shape, depth=depth)
-    model.compile(loss='categorical_crossentropy',
-                  optimizer=Adam(lr=lr_schedule(0)),
-                  metrics=['accuracy'])
-    # 模型概览
-    model.summary()
-
-    # 画出模型结构图，并保存成图片
-    plot_model(model, to_file="ResNetV2.png")
+        # 灵活设置
+        model = ResNet50(include_top=True, weights="imagenet",)
+        model.compile(loss='categorical_crossentropy',
+                      optimizer=Adam(lr=lr_schedule(0)),
+                      metrics=['accuracy'])
+        # 模型概览
+        model.summary()
 
     # 设置模型保存路径
     save_dir = os.path.join(os.getcwd(), "ResNet_models")
@@ -350,7 +338,3 @@ def train():
     scores = model.evaluate(x_test, y_test, verbose=1)
     print('Test loss:', scores[0])
     print('Test accuracy:', scores[1])
-
-if __name__=="__main__":
-    train()
-
